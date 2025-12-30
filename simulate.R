@@ -1,9 +1,10 @@
+library(io)
 library(MASS)
 library(stats)
 library(ggplot2)
 library(predtools)
 
-set.seed(123456)
+set.seed(123)
 
 sim_data <- function(N, skew=0.5) {
 	N1 <- round(N * skew);
@@ -34,12 +35,12 @@ sim_data <- function(N, skew=0.5) {
 }
 
 data1 <- sim_data(200000, 0.5);
-data2 <- downsample_pos(data1, fraction=0.1);
+data2 <- downsample_pos(data1, fraction=0.11);
 data3 <- downsample_pos(data1, fraction=0.01);
 
-skew1 <- prop.table(table(data1$y))[2];
-skew2 <- prop.table(table(data2$y))[2];
-skew3 <- prop.table(table(data3$y))[2];
+skew1 <- round(prop.table(table(data1$y))[2], digits=2);
+skew2 <- round(prop.table(table(data2$y))[2], digits=2);
+skew3 <- round(prop.table(table(data3$y))[2], digits=2);
 
 train_model <- function(data) {
 	d <- data.frame(y = data$y, data$X);
@@ -99,10 +100,15 @@ d.eval3 <- data.frame(
 
 d.eval <- rbind(d.eval1, d.eval2, d.eval3);
 
-ggplot(d.eval, aes(x=score, fill=factor(y))) +
-	theme_classic() +
-	geom_density(alpha=0.5) +
-	facet_grid(skew ~ .)
+qdraw(
+	ggplot(d.eval, aes(x=score, fill=factor(y))) +
+		theme_classic() +
+		geom_density(alpha=0.5) +
+		facet_grid(skew ~ .) +
+		labs(subtitle = "stratified by skew")
+	,
+	file = "score-distribs.pdf"
+)
 
 library(precrec)
 
@@ -115,11 +121,44 @@ auc(eval2)
 eval3 <- evalmod(scores = d.eval3$score, labels = d.eval3$y);
 auc(eval3)
 
-plot(eval1)
-plot(eval2)
-plot(eval3)
+d.auc <- rbind(
+	data.frame(auc(eval1), skew=skew1),
+	data.frame(auc(eval2), skew=skew2), 
+	data.frame(auc(eval3), skew=skew3)
+);
 
-calibration_plot(d.eval1, obs = "y", pred = "prob")
-calibration_plot(d.eval2, obs = "y", pred = "prob")
-calibration_plot(d.eval3, obs = "y", pred = "prob")
+qdraw(
+	ggplot(d.auc, aes(x=factor(skew), y=aucs)) +
+		theme_classic() +
+		geom_col() +
+		facet_grid(. ~ curvetypes) +
+		xlab("skew") + ylab("AUC")
+	,
+	file = "aucs.pdf"
+)
+
+qdraw(plot(eval1), width = 10, file = "eval1.pdf")
+qdraw(plot(eval2), width = 10, file = "eval2.pdf")
+qdraw(plot(eval3), width = 10, file = "eval3.pdf")
+
+qdraw(
+	{
+		print(calibration_plot(d.eval1, obs = "y", pred = "prob"))
+	},
+	file = "calib1.pdf"
+);
+
+qdraw(
+	{
+		print(calibration_plot(d.eval2, obs = "y", pred = "prob"))
+	},
+	file = "calib2.pdf"
+);
+
+qdraw(
+	{
+		print(calibration_plot(d.eval3, obs = "y", pred = "prob"))
+	},
+	file = "calib3.pdf"
+);
 
