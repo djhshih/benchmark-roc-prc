@@ -6,8 +6,8 @@ library(predtools)
 
 set.seed(123)
 
-sim_data <- function(N, skew=0.5) {
-	N1 <- round(N * skew);
+sim_data <- function(N, prevalence=0.5) {
+	N1 <- round(N * prevalence);
 	N0 <- N - N1;
 
 	K <- 3;
@@ -34,13 +34,23 @@ sim_data <- function(N, skew=0.5) {
 	list(X = X, y = y, N0 = N0, N1 = N1, mu0 = mu0, mu1 = mu1, Sigma0 = Sigma0, Sigma1)
 }
 
+downsample_pos <- function(data, fraction) {
+	N1 <- sum(data$y == 1);
+	idx <- c(which(data$y == 0), sample(which(data$y == 1), round(N1*fraction)));
+	data2 <- data;
+	data2$X <- data2$X[idx, ];
+	data2$y <- data2$y[idx];
+	data2
+}
+
+
 data1 <- sim_data(200000, 0.5);
 data2 <- downsample_pos(data1, fraction=0.11);
 data3 <- downsample_pos(data1, fraction=0.01);
 
-skew1 <- round(prop.table(table(data1$y))[2], digits=2);
-skew2 <- round(prop.table(table(data2$y))[2], digits=2);
-skew3 <- round(prop.table(table(data3$y))[2], digits=2);
+prevalence1 <- round(prop.table(table(data1$y))[2], digits=2);
+prevalence2 <- round(prop.table(table(data2$y))[2], digits=2);
+prevalence3 <- round(prop.table(table(data3$y))[2], digits=2);
 
 train_model <- function(data) {
 	d <- data.frame(y = data$y, data$X);
@@ -60,18 +70,9 @@ prob1 <- predict_model(mod1, data1, type="response");
 d.eval1 <- data.frame(
 	score = score1,
 	prob = prob1,
-	y = data$y,
-	skew = skew1
+	y = data1$y,
+	prevalence = prevalence1
 );
-
-downsample_pos <- function(data, fraction) {
-	N1 <- sum(data$y == 1);
-	idx <- c(which(data$y == 0), sample(which(data$y == 1), round(N1*fraction)));
-	data2 <- data;
-	data2$X <- data2$X[idx, ];
-	data2$y <- data2$y[idx];
-	data2
-}
 
 mod2 <- train_model(data2);
 summary(mod2)
@@ -82,7 +83,7 @@ d.eval2 <- data.frame(
 	score = score2,
 	prob = prob2,
 	y = data2$y,
-	skew = round(skew2, digits=2)
+	prevalence = round(prevalence2, digits=2)
 );
 
 mod3 <- train_model(data3);
@@ -95,7 +96,7 @@ d.eval3 <- data.frame(
 	score = score3,
 	prob = prob3,
 	y = data3$y,
-	skew = round(skew3, digits=2)
+	prevalence = round(prevalence3, digits=2)
 );
 
 d.eval <- rbind(d.eval1, d.eval2, d.eval3);
@@ -104,8 +105,8 @@ qdraw(
 	ggplot(d.eval, aes(x=score, fill=factor(y))) +
 		theme_classic() +
 		geom_density(alpha=0.5) +
-		facet_grid(skew ~ .) +
-		labs(subtitle = "stratified by skew")
+		facet_grid(prevalence ~ .) +
+		labs(subtitle = "stratified by prevalence")
 	,
 	file = "score-distribs.pdf"
 )
@@ -122,17 +123,17 @@ eval3 <- evalmod(scores = d.eval3$score, labels = d.eval3$y);
 auc(eval3)
 
 d.auc <- rbind(
-	data.frame(auc(eval1), skew=skew1),
-	data.frame(auc(eval2), skew=skew2), 
-	data.frame(auc(eval3), skew=skew3)
+	data.frame(auc(eval1), prevalence=prevalence1),
+	data.frame(auc(eval2), prevalence=prevalence2), 
+	data.frame(auc(eval3), prevalence=prevalence3)
 );
 
 qdraw(
-	ggplot(d.auc, aes(x=factor(skew), y=aucs)) +
+	ggplot(d.auc, aes(x=factor(prevalence), y=aucs)) +
 		theme_classic() +
 		geom_col() +
 		facet_grid(. ~ curvetypes) +
-		xlab("skew") + ylab("AUC")
+		xlab("prevalence") + ylab("AUC")
 	,
 	file = "aucs.pdf"
 )
